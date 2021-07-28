@@ -5,7 +5,7 @@ import java.util.Queue;
 
 public class Main {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         String inputName = "bigfile.txt";
         String outputName = "bigfile.sorted.txt";
         long totalSize = (1024L * 1024L) * 10000L; //10Gb

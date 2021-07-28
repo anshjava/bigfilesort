@@ -1,1 +1,5 @@
 /target/
+/.idea/
+/bigfilesort.iml
+/bigfile.sorted.txt
+/bigfile.txt
