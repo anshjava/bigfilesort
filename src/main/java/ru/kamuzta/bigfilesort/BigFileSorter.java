@@ -6,13 +6,15 @@ import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.*;
 
-public class Util {
+public class BigFileSorter {
+    //генерирует большой файл со случайными строками.
+    // Длина строки рассчитывается исходя из размера файла и желаемого количества строк
     public static void generateFile(String fileName, long totalSize, long totalLines, long memory) {
         //вычисляем длину строки в символах, примерно 1 байт на символ
         long start = System.nanoTime();
         int stringLength = (int) (totalSize / totalLines);
         int iterations = (int) (totalSize / memory);
-        System.out.printf("НАРЕЗКА ФАЙЛА НА ЧАСТИ\nФайл из %d строк размером %d Mb будет записан в %d подходов, по %d строк в каждом с использованием %d памяти\n",
+        System.out.printf("ГЕНЕРАЦИЯ БОЛЬШОГО ФАЙЛА\nФайл из %d строк размером %d Mb будет записан в %d подходов, по %d строк в каждом с использованием %d памяти\n",
                 totalLines,
                 totalSize / 1024 / 1024,
                 iterations,
@@ -25,11 +27,20 @@ public class Util {
                 stringList.add(getRandomString(stringLength));
             }
             writeListToFile(stringList, fileName);
-            System.out.println("Итерация # " + i + " завершена, в файл добавлено " + stringList.size() + " строк длиною " + stringLength + " символов");
+            System.out.printf("Итерация # %d завершена, в файл добавлено %d строк длиною %d символов\n",
+                    i+1,
+                    stringList.size(),
+                    stringLength);
         }
 
         long time = System.nanoTime() - start;
         System.out.printf("Файл размером %d Mb сгенерирован за %.3f секунд\n", totalSize / 1024 / 1024, time / 1e9);
+    }
+
+    //сортирует содержимое большого файла и отчитывается о процессе в консоль
+    public static void sortFile(String inputName, String outputName, long memory) {
+        Queue<String> queue = BigFileSorter.sortEachPart(BigFileSorter.ripFileToParts(inputName,memory));
+        BigFileSorter.mergeSortParts(queue,outputName);
     }
 
     //получаем рандомную строку
@@ -53,7 +64,7 @@ public class Util {
     }
 
     //нарезает файл на части, влезающие в память по отдельности
-    public static List<String> ripFileToParts(String fileName, long memory) {
+    private static List<String> ripFileToParts(String fileName, long memory) {
         System.out.println("НАРЕЗКА ФАЙЛА НА ЧАСТИ");
         long start = System.nanoTime();
         List<String> partsNames = new ArrayList<>();
@@ -72,7 +83,7 @@ public class Util {
             int partNumber = 1;
             long bytesReaded = 0;
             List<String> stringList = new ArrayList<>();
-            String line = "";
+            String line;
             //читаем построчно файл, после вычитки предельного значения байтов отправляем данные на запись в очередной кусок
             while ((line = sourceReader.readLine()) != null) {
                 stringList.add(line);
@@ -90,7 +101,9 @@ public class Util {
             //записываем последний кусок, после выхода из цикла
             writeListToFile(stringList, fileName + ".part" + partNumber);
             partsNames.add(fileName + ".part" + partNumber);
-            System.out.printf("Итерация # %d завершена, в очередной кусок перенесено %d строк\n",partsNames.size(),stringList.size());
+            System.out.printf("Итерация # %d завершена, в очередной кусок перенесено %d строк\n",
+                    partsNames.size(),
+                    stringList.size());
 
 
         } catch (IOException e) {
@@ -102,7 +115,7 @@ public class Util {
     }
 
     //пробегается по списку имен кусков, сортирует содержимое каждого
-    public static Queue<String> sortEachPart(List<String> partsNames) {
+    private static Queue<String> sortEachPart(List<String> partsNames) {
         System.out.println("ПЕРВИЧНАЯ СОРТИРОВКА СОДЕРЖИМОГО КУСКОВ");
         Queue<String> sortedPartsNames = new LinkedList<>();
 
@@ -116,6 +129,9 @@ public class Util {
             }
             Collections.sort(stringList);
             writeListToFile(stringList, partName + ".sorted");
+            System.out.printf("Содержимое куска %s было отсортировано и записанов в файл %s\n",
+                    partName,
+                    partName + ".sorted");
 
             sortedPartsNames.add(partName + ".sorted");
         }
@@ -123,7 +139,7 @@ public class Util {
     }
 
     //последовательно мержит и сортирует по 2 куска из полученного списка до тех пор, пока в списке не останется 1 файл
-    public static void mergeSortParts(Queue<String> sortedPartsNames,String outputName) {
+    private static void mergeSortParts(Queue<String> sortedPartsNames,String outputName) {
         System.out.println("СОРТИРОВКА СЛИЯНИЕМ");
         long start = System.nanoTime();
         int stepNumber = 0;
@@ -151,14 +167,12 @@ public class Util {
                     if(getNext2)
                         line2 = sourceReader2.readLine();
                     if (line1 == null && line2 == null) { //условие завершения работы с парой кусков
-                        getNext1 = true;
-                        getNext2 = true;
                         break;
-                    } else if (line1 == null && line2 != null) {
+                    } else if (line1 == null) {
                         pw.println(line2);
                         getNext1 = false;
                         getNext2 = true;
-                    } else if (line2 == null && line1 != null) {
+                    } else if (line2 == null) {
                         pw.println(line1);
                         getNext1 = true;
                         getNext2 = false;
@@ -189,7 +203,11 @@ public class Util {
         }
         File oldFileName = new File(sortedPartsNames.poll());
         File newFileName = new File(outputName);
-        oldFileName.renameTo(newFileName);
+        if (!oldFileName.renameTo(newFileName)) {
+            System.out.printf("НЕВОЗМОЖНО ПЕРЕИМОНОВАТЬ файл %s в файл %s",
+                    oldFileName.getName(),
+                    outputName);
+        }
         long time = System.nanoTime() - start;
         System.out.printf("Получен отсортированный итоговый файл %s. Сортировка слиянием заняла %.3f секунд\n",
                 newFileName.toString(),
